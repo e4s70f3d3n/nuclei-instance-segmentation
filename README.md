@@ -1,6 +1,4 @@
-from pathlib import Path
 
-readme_content = """
 # NuInsSeg Instance Segmentation (Colab)
 
 This repository contains a Google Colab notebook for training and evaluating an instance segmentation model using the **NuInsSeg** dataset with custom augmentations and a LoRA-efficient SAM model.

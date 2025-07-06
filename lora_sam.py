@@ -4,8 +4,6 @@ import torch.nn as nn
 from typing import Optional, List, Dict
 
 class LoRA_QKV_Projection(nn.Module):
-    """Alternative implementation of LoRA for QKV projections with different architecture"""
-    
     def __init__(
         self,
         original_layer: nn.Module,
@@ -20,7 +18,6 @@ class LoRA_QKV_Projection(nn.Module):
         self.in_features = original_layer.in_features
         self.out_features = original_layer.out_features
         
-        # Using Conv1d instead of Linear for the LoRA projections
         self.lora_q = nn.Sequential(
             nn.Conv1d(self.in_features, rank, 1, bias=False),
             nn.Conv1d(rank, self.in_features, 1, bias=False)
@@ -31,32 +28,27 @@ class LoRA_QKV_Projection(nn.Module):
             nn.Conv1d(rank, self.in_features, 1, bias=False)
         ).to(device)
         
-        # Initialize parameters
+
         self._init_lora_weights()
         
     def _init_lora_weights(self):
-        # Different initialization strategy
         nn.init.normal_(self.lora_q[0].weight, std=1/math.sqrt(self.rank))
         nn.init.zeros_(self.lora_q[1].weight)
         nn.init.normal_(self.lora_v[0].weight, std=1/math.sqrt(self.rank))
         nn.init.zeros_(self.lora_v[1].weight)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Original projection
         qkv = self.original_proj(x)  # B,N,3*C
         
-        # Get dimensions
         B, N, _ = qkv.shape
         C = self.in_features
         
-        # Reshape for conv1d (B,C,N)
+
         x_reshaped = x.transpose(1, 2)
         
-        # Compute LoRA contributions
         lora_q = self.lora_q(x_reshaped).transpose(1, 2)  # B,N,C
         lora_v = self.lora_v(x_reshaped).transpose(1, 2)  # B,N,C
-        
-        # Split and add LoRA contributions
+  
         qkv = qkv.view(B, N, 3, C)
         qkv[:, :, 0] += self.scaling * lora_q  # Add to query
         qkv[:, :, 2] += self.scaling * lora_v  # Add to value
@@ -64,14 +56,6 @@ class LoRA_QKV_Projection(nn.Module):
         return qkv.view(B, N, 3 * C)
 
 class AdaptiveLoRA_EfficientSAM(nn.Module):
-    """Alternative LoRA implementation for EfficientSAM with different features:
-    
-    - Uses Conv1d instead of Linear for LoRA projections
-    - Implements layer-wise learning rates
-    - Adds optional dropout for LoRA paths
-    - Implements gradient checkpointing for memory efficiency
-    """
-    
     def __init__(
         self,
         config,
@@ -120,11 +104,9 @@ class AdaptiveLoRA_EfficientSAM(nn.Module):
                 device=self.device
             )
             
-            # Replace original with LoRA version
             block.attn.qkv = lora_qkv
             self.lora_modules.append(lora_qkv)
             
-        # Dropout for LoRA paths
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         
     def forward(self, batched_images, batched_points, batched_point_labels, scale_to_original_image_size=True):
@@ -143,7 +125,6 @@ class AdaptiveLoRA_EfficientSAM(nn.Module):
         """Get LoRA parameters with layer-wise learning rate scaling"""
         params = []
         for layer_idx, lora_module in zip(self.lora_layers, self.lora_modules):
-            # Scale learning rate by layer depth
             lr_scale = 1.0 / (layer_idx + 1)
             
             params.append({
